@@ -4,7 +4,7 @@ import random
 import traceback
 
 try:
-    from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QVBoxLayout, QDesktopWidget
+    from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QVBoxLayout, QDesktopWidget, QFrame
     from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QSize, QEvent
     from PyQt5.QtGui import QPainter, QColor, QLinearGradient, QFont, QFontMetrics, QPainterPath, QBrush, QPen
     from PyQt5.QtGui import QCursor
@@ -199,7 +199,7 @@ class PrivacyAssistantUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("防窥助手")
-        self.setFixedSize(px(420), px(680))
+        self.setFixedSize(px(420), px(650))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.privacy_active = False
@@ -239,8 +239,8 @@ class PrivacyAssistantUI(QWidget):
 
     def _init_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(px(16), px(16), px(16), px(16))
-        root.setSpacing(px(12))
+        root.setContentsMargins(px(16), px(12), px(16), px(12))
+        root.setSpacing(px(10))
 
         card = QWidget()
         card.setObjectName("mainCard")
@@ -253,7 +253,7 @@ class PrivacyAssistantUI(QWidget):
             }
         """ % px(16))
         lay = QVBoxLayout(card)
-        lay.setContentsMargins(px(22), px(16), px(22), px(16))
+        lay.setContentsMargins(px(22), px(16), px(22), px(24))
         lay.setSpacing(px(10))
 
         # ---- 标题栏 ----
@@ -318,16 +318,11 @@ class PrivacyAssistantUI(QWidget):
         dc.setObjectName("detectCard")
         dc.setStyleSheet("#detectCard{background:#f5f0eb;border-radius:%dpx;border:1px solid #e8e0d8;}" % px(12))
         dl = QVBoxLayout(dc)
-        dl.setContentsMargins(px(16), px(14), px(16), px(14))
-        dl.setSpacing(px(6))
-        dt = QLabel("实时屏幕暴露检测")
-        dt.setAlignment(Qt.AlignCenter)
-        dt.setFont(QFont("Microsoft YaHei", font_size(9), QFont.Bold))
-        dt.setStyleSheet("color:#37474f;")
-        dl.addWidget(dt)
+        dl.setContentsMargins(px(14), px(10), px(14), px(10))
+        dl.setSpacing(px(4))
 
         self.mockup_label = QLabel()
-        self.mockup_label.setFixedHeight(px(90))
+        self.mockup_label.setFixedHeight(px(70))
         self.mockup_label.setAlignment(Qt.AlignCenter)
         self.mockup_label.setStyleSheet(
             "background:#f5f0eb; border-radius:%dpx;"
@@ -397,17 +392,25 @@ class PrivacyAssistantUI(QWidget):
         lay.addSpacing(px(20))
 
         # ---- 底部声明 ----
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("color:#e0e0e0;")
+        line.setFixedHeight(px(1))
+        lay.addWidget(line)
+        lay.addSpacing(px(4))
+
         foot = QLabel("LOCAL PRIVACY · NO CAMERA · NO DATA UPLOAD")
         foot.setAlignment(Qt.AlignCenter)
         foot.setFont(QFont("Consolas", font_size(8)))
         foot.setStyleSheet("color:#b0bec5;letter-spacing:1px;")
         lay.addWidget(foot)
+        lay.addSpacing(px(2))
 
         foot_row = QHBoxLayout()
         foot_row.setContentsMargins(0, 0, 0, 0)
         foot_row.setSpacing(0)
         foot_row.addStretch()
-        foot_engine = QLabel("PRIVACY ENGINE v2.3")
+        foot_engine = QLabel("PRIVACY ENGINE v2.4")
         foot_engine.setFont(QFont("Consolas", font_size(8), QFont.Bold))
         foot_engine.setStyleSheet("color:#2979ff;letter-spacing:1px;")
         foot_row.addWidget(foot_engine)
