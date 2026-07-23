@@ -1,5 +1,6 @@
 import sys
 import os
+import random
 import traceback
 
 try:
@@ -198,7 +199,7 @@ class PrivacyAssistantUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("防窥助手")
-        self.setFixedSize(px(420), px(720))
+        self.setFixedSize(px(420), px(680))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.privacy_active = False
@@ -252,8 +253,8 @@ class PrivacyAssistantUI(QWidget):
             }
         """ % px(16))
         lay = QVBoxLayout(card)
-        lay.setContentsMargins(px(22), px(20), px(22), px(20))
-        lay.setSpacing(px(12))
+        lay.setContentsMargins(px(22), px(16), px(22), px(16))
+        lay.setSpacing(px(10))
 
         # ---- 标题栏 ----
         tb = QHBoxLayout()
@@ -282,7 +283,7 @@ class PrivacyAssistantUI(QWidget):
         close_btn.clicked.connect(self.close)
         tb.addWidget(close_btn)
         lay.addLayout(tb)
-        lay.addSpacing(px(4))
+        lay.addSpacing(px(2))
 
         big = QLabel("防窥助手")
         big.setAlignment(Qt.AlignCenter)
@@ -295,13 +296,22 @@ class PrivacyAssistantUI(QWidget):
         eng.setFont(QFont("Consolas", font_size(10), QFont.Bold))
         eng.setStyleSheet("color:#2979ff;letter-spacing:2px;")
         lay.addWidget(eng)
-        lay.addSpacing(px(2))
-        desc = QLabel("动态视线隔离 · 局部可视化防护")
+        lay.addSpacing(px(1))
+        desc = QLabel(random.choice([
+            "动态视线隔离 · 局部可视化防护",
+            "你的屏幕 · 你的隐私 · 你的掌控",
+            "侧目无畏 · 凝视无忧",
+            "防窥黑科技 · 懂你更护你",
+            "隐私不设限 · 视野更自由",
+            "看得见的安心 · 看不见的守护",
+            "一键防窥 · 全屏无虑",
+            "左右兼顾 · 中心更亮",
+        ]))
         desc.setAlignment(Qt.AlignCenter)
         desc.setFont(QFont("Microsoft YaHei", font_size(9)))
         desc.setStyleSheet("color:#78909c;")
         lay.addWidget(desc)
-        lay.addSpacing(px(10))
+        lay.addSpacing(px(8))
 
         # ---- 检测卡片 ----
         dc = QWidget()
@@ -397,7 +407,7 @@ class PrivacyAssistantUI(QWidget):
         foot_row.setContentsMargins(0, 0, 0, 0)
         foot_row.setSpacing(0)
         foot_row.addStretch()
-        foot_engine = QLabel("PRIVACY ENGINE v2.2")
+        foot_engine = QLabel("PRIVACY ENGINE v2.3")
         foot_engine.setFont(QFont("Consolas", font_size(8), QFont.Bold))
         foot_engine.setStyleSheet("color:#2979ff;letter-spacing:1px;")
         foot_row.addWidget(foot_engine)
