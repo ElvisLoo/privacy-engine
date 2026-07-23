@@ -13,7 +13,10 @@ try:
 except Exception as e:
     print(f"[IMPORT ERROR] {e}")
     traceback.print_exc()
-    input("Press Enter to exit...")
+    try:
+        input("Press Enter to exit...")
+    except Exception:
+        pass
     sys.exit(1)
 
 
@@ -323,6 +326,12 @@ class PrivacyAssistantUI(QWidget):
         self.mockup_label.setText("🔒 防窥模式\n圆形可视 / 左右三区域")
         dl.addWidget(self.mockup_label)
 
+        hint = QLabel("F6 全屏防窥  |  F7 左右防窥  |  F8 降低强度  |  F9 提高强度")
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setFont(QFont("Microsoft YaHei", font_size(8)))
+        hint.setStyleSheet("color:#90a4ae;padding:2px 0;")
+        dl.addWidget(hint)
+
         srow = QHBoxLayout()
         srow.setSpacing(0)
         self.s2 = StatCard("屏幕暴露", "100%", "#ff9800")
@@ -388,7 +397,7 @@ class PrivacyAssistantUI(QWidget):
         foot_row.setContentsMargins(0, 0, 0, 0)
         foot_row.setSpacing(0)
         foot_row.addStretch()
-        foot_engine = QLabel("PRIVACY ENGINE v2.1")
+        foot_engine = QLabel("PRIVACY ENGINE v2.2")
         foot_engine.setFont(QFont("Consolas", font_size(8), QFont.Bold))
         foot_engine.setStyleSheet("color:#2979ff;letter-spacing:1px;")
         foot_row.addWidget(foot_engine)
@@ -407,12 +416,6 @@ class PrivacyAssistantUI(QWidget):
         root.addWidget(card)
 
         self._update_buttons()
-
-        hint = QLabel("F6 全屏防窥  |  F9 左右防窥  |  F7 降低强度  |  F8 提高强度")
-        hint.setAlignment(Qt.AlignCenter)
-        hint.setFont(QFont("Microsoft YaHei", font_size(8)))
-        hint.setStyleSheet("color:rgba(255,255,255,120);margin-top:8px;")
-        root.addWidget(hint)
 
     def _set_btn_blue(self, btn):
         style = (
@@ -556,9 +559,9 @@ def main():
         ui.show()
 
         keyboard.add_hotkey("F6", ui._toggle_circle)
-        keyboard.add_hotkey("F7", lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
-        keyboard.add_hotkey("F8", lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
-        keyboard.add_hotkey("F9", ui._toggle_zone)
+        keyboard.add_hotkey("F7", ui._toggle_zone)
+        keyboard.add_hotkey("F8", lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
+        keyboard.add_hotkey("F9", lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
 
         print("=" * 40)
         print("  防窥助手")
@@ -567,13 +570,19 @@ def main():
         print("  F7  降低强度")
         print("  F8  提高强度")
         print("=" * 40)
-        sys.stdout.flush()
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
 
         sys.exit(app.exec_())
     except Exception as e:
-        print(f"[FATAL ERROR] {e}")
-        traceback.print_exc()
-        input("Press Enter to exit...")
+        try:
+            print(f"[FATAL ERROR] {e}")
+            traceback.print_exc()
+            input("Press Enter to exit...")
+        except Exception:
+            pass
         sys.exit(1)
 
 
