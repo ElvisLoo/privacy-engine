@@ -571,17 +571,17 @@ def main():
         ui.show()
 
         try:
-            keyboard.add_hotkey("F6", ui._toggle_circle)
-            keyboard.add_hotkey("F7", ui._toggle_zone)
-            keyboard.add_hotkey("F8", lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
-            keyboard.add_hotkey("F9", lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
+            keyboard.add_hotkey("F6", lambda: QTimer.singleShot(0, ui._toggle_circle))
+            keyboard.add_hotkey("F7", lambda: QTimer.singleShot(0, ui._toggle_zone))
+            keyboard.add_hotkey("F8", lambda: QTimer.singleShot(0, lambda: ui.slider.setValue(max(0, ui.slider.value() - 5))))
+            keyboard.add_hotkey("F9", lambda: QTimer.singleShot(0, lambda: ui.slider.setValue(min(100, ui.slider.value() + 5))))
         except Exception as e:
             print(f"[WARN] Hotkey registration failed (not admin?): {e}")
 
-        QShortcut(QKeySequence("F6"), ui).activated.connect(ui._toggle_circle)
-        QShortcut(QKeySequence("F7"), ui).activated.connect(ui._toggle_zone)
-        QShortcut(QKeySequence("F8"), ui).activated.connect(lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
-        QShortcut(QKeySequence("F9"), ui).activated.connect(lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
+        QShortcut(QKeySequence("F6"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_circle)
+        QShortcut(QKeySequence("F7"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_zone)
+        QShortcut(QKeySequence("F8"), ui, context=Qt.ApplicationShortcut).activated.connect(lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
+        QShortcut(QKeySequence("F9"), ui, context=Qt.ApplicationShortcut).activated.connect(lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
 
         print("=" * 40)
         print("  防窥助手")
