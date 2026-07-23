@@ -409,7 +409,7 @@ class PrivacyAssistantUI(QWidget):
         foot_row.setContentsMargins(0, 0, 0, 0)
         foot_row.setSpacing(0)
         foot_row.addStretch()
-        foot_engine = QLabel("PRIVACY ENGINE v2.4")
+        foot_engine = QLabel("PRIVACY ENGINE v2.5")
         foot_engine.setFont(QFont("Consolas", font_size(8), QFont.Bold))
         foot_engine.setStyleSheet("color:#2979ff;letter-spacing:1px;")
         foot_row.addWidget(foot_engine)
