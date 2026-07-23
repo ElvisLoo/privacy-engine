@@ -4,10 +4,9 @@ import random
 import traceback
 
 try:
-    from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QVBoxLayout, QDesktopWidget, QFrame
+    from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QVBoxLayout, QDesktopWidget, QFrame, QShortcut
     from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QSize, QEvent
-    from PyQt5.QtGui import QPainter, QColor, QLinearGradient, QFont, QFontMetrics, QPainterPath, QBrush, QPen
-    from PyQt5.QtGui import QCursor
+    from PyQt5.QtGui import QPainter, QColor, QLinearGradient, QFont, QFontMetrics, QPainterPath, QBrush, QPen, QKeySequence, QCursor
     import keyboard
     import webbrowser
     print("All imports OK")
@@ -571,10 +570,18 @@ def main():
         ui = PrivacyAssistantUI()
         ui.show()
 
-        keyboard.add_hotkey("F6", ui._toggle_circle)
-        keyboard.add_hotkey("F7", ui._toggle_zone)
-        keyboard.add_hotkey("F8", lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
-        keyboard.add_hotkey("F9", lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
+        try:
+            keyboard.add_hotkey("F6", ui._toggle_circle)
+            keyboard.add_hotkey("F7", ui._toggle_zone)
+            keyboard.add_hotkey("F8", lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
+            keyboard.add_hotkey("F9", lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
+        except Exception as e:
+            print(f"[WARN] Hotkey registration failed (not admin?): {e}")
+
+        QShortcut(QKeySequence("F6"), ui).activated.connect(ui._toggle_circle)
+        QShortcut(QKeySequence("F7"), ui).activated.connect(ui._toggle_zone)
+        QShortcut(QKeySequence("F8"), ui).activated.connect(lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
+        QShortcut(QKeySequence("F9"), ui).activated.connect(lambda: ui.slider.setValue(min(100, ui.slider.value() + 5)))
 
         print("=" * 40)
         print("  防窥助手")
