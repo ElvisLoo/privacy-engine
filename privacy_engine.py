@@ -330,7 +330,8 @@ class PrivacyAssistantUI(QWidget):
         self.mockup_label.setText("🔒 防窥模式\n圆形可视 / 左右三区域")
         dl.addWidget(self.mockup_label)
 
-        hint = QLabel("F6 全屏防窥  |  F7 左右防窥  |  F8 降低强度  |  F9 提高强度")
+        hint = QLabel("F6 全屏防窥  |  F7 左右防窥  |  F8 减弱  |  F9 增强")
+        self.hint = hint
         hint.setAlignment(Qt.AlignCenter)
         hint.setFont(QFont("Microsoft YaHei", font_size(8)))
         hint.setStyleSheet("color:#90a4ae;padding:2px 0;")
@@ -553,8 +554,23 @@ class PrivacyAssistantUI(QWidget):
         if self._overlay is not None:
             self._overlay.hide()
 
-    def paintEvent(self, event):
-        pass
+    def closeEvent(self, event):
+        # 遮罩是无父对象的顶层窗口，主窗口关闭后它不会自动消失，
+        # 会一直以半透明全屏窗盖在桌面上，用户以为程序已退出却点不动桌面。
+        # 这里必须显式销毁。
+        try:
+            if self._overlay is not None:
+                timer = getattr(self._overlay, "_timer", None)
+                if timer is not None:
+                    timer.stop()
+                self._overlay.hide()
+                self._overlay.deleteLater()
+                self._overlay = None
+        except Exception:
+            pass
+        self.privacy_active = False
+        self.privacy_mode = "none"
+        super().closeEvent(event)
 
 
 def main():
@@ -577,6 +593,12 @@ def main():
             keyboard.add_hotkey("F9", lambda: QTimer.singleShot(0, lambda: ui.slider.setValue(min(100, ui.slider.value() + 5))))
         except Exception as e:
             print(f"[WARN] Hotkey registration failed (not admin?): {e}")
+            try:
+                # 热键失效是高频场景（非管理员 / Linux 无 /dev/input 权限），
+                # 只在控制台 warn 的话用户会以为按 F6 没反应是 bug。
+                ui.hint.setText("全局热键不可用（需管理员权限），请用界面按钮操作")
+            except Exception:
+                pass
 
         QShortcut(QKeySequence("F6"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_circle)
         QShortcut(QKeySequence("F7"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_zone)
@@ -586,9 +608,10 @@ def main():
         print("=" * 40)
         print("  防窥助手")
         print("=" * 40)
-        print("  F6  开关防窥")
-        print("  F7  降低强度")
-        print("  F8  提高强度")
+        print("  F6  全屏圆形防窥")
+        print("  F7  左右三区域防窥")
+        print("  F8  强度 -5%")
+        print("  F9  强度 +5%")
         print("=" * 40)
         try:
             sys.stdout.flush()
