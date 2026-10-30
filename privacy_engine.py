@@ -1,4 +1,9 @@
 import sys
+
+try:
+    import settings_store
+except ImportError:  # 单文件分发时可能没有这个模块
+    settings_store = None
 import os
 import random
 import traceback
@@ -227,14 +232,64 @@ class PrivacyAssistantUI(QWidget):
         self.intensity = 0.5
         self._overlay = None
         self._drag_pos = None
+        # 读上次的设置：强度、模式、窗口位置。
+        # 防窥工具每次启动都要重拨一遍强度，用两天就烦了。
+        self._settings = self._load_settings()
         self._init_ui()
-        self._center()
+        self._restore_or_center()
 
     def _center(self):
         f = self.frameGeometry()
         c = QDesktopWidget().availableGeometry().center()
         f.moveCenter(c)
         self.move(f.topLeft())
+
+    # ---------- 设置持久化 ----------
+    def _load_settings(self):
+        if settings_store is None:
+            return {"intensity": 50, "mode": "none", "window_x": None, "window_y": None}
+        return settings_store.load()
+
+    def _save_settings(self, **patch):
+        """合并后落盘。失败静默：一个存不上配置的防窥工具也得能继续用。"""
+        if settings_store is None:
+            return
+        data = dict(self._settings)
+        data.update(patch)
+        ok, _err = settings_store.save(data)
+        if ok:
+            self._settings = settings_store.load()
+
+    def _restore_or_center(self):
+        """
+        有记住的位置且仍在某块屏幕可见范围内就恢复，否则居中。
+        拔掉副屏后旧坐标可能落在屏幕外 —— 窗口会「启动成功但看不见」，
+        对防窥工具来说比记不住位置糟糕得多。
+        """
+        x = self._settings.get("window_x")
+        y = self._settings.get("window_y")
+        if x is not None and y is not None and self._on_any_screen(x, y):
+            self.move(int(x), int(y))
+            return
+        if x is not None:
+            # 记住的位置失效了，清掉，免得每次启动都白试一次
+            self._save_settings(window_x=None, window_y=None)
+        self._center()
+
+    def _on_any_screen(self, x, y):
+        """窗口左上角是否落在某块屏幕内（留出能点到标题区的余量）。"""
+        try:
+            w = self.width() or px(420)
+            h = self.height() or px(650)
+            for screen in QApplication.screens():
+                g = screen.availableGeometry()
+                # 至少要有 120x60 的区域可见，否则用户抓不到窗口
+                if (x + w > g.x() + 120 and x < g.x() + g.width() - 60
+                        and y + h > g.y() + 60 and y < g.y() + g.height() - 60):
+                    return True
+        except Exception:
+            pass
+        return False
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -378,7 +433,10 @@ class PrivacyAssistantUI(QWidget):
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setMinimum(0)
         self.slider.setMaximum(100)
-        self.slider.setValue(50)
+        # 用上次保存的强度，而不是写死的 50
+        saved_intensity = int(self._settings.get("intensity", 50))
+        self.intensity = max(0.0, min(1.0, saved_intensity / 100.0))
+        self.slider.setValue(saved_intensity)
         self.slider.setStyleSheet(SLIDER_STYLE)
         self.slider.valueChanged.connect(self._on_slider)
         sl.addWidget(self.slider, 1)
@@ -481,6 +539,15 @@ class PrivacyAssistantUI(QWidget):
 
     def _on_slider(self, v):
         self.intensity = v / 100.0
+        # 拖动过程中会连续触发。用一个单次定时器延迟落盘，
+        # 松手后才真正写一次，避免每帧都碰磁盘。
+        timer = getattr(self, "_save_timer", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda: self._save_settings(intensity=self.slider.value()))
+            self._save_timer = timer
+        timer.start(400)
         tag = "无" if v == 0 else ("轻度" if v < 33 else ("标准" if v < 66 else "极致"))
         self.sl_val.setText(f"{tag} · {v}%")
         self._update_stats()
@@ -603,6 +670,22 @@ class PrivacyAssistantUI(QWidget):
                 self._overlay = None
         except Exception:
             pass
+        # 关窗前把当前状态记下来：下次打开直接回到上次的样子。
+        # 先停掉防抖定时器，否则它可能在窗口销毁后再触发一次写盘。
+        try:
+            t = getattr(self, "_save_timer", None)
+            if t is not None:
+                t.stop()
+            pos = self.pos()
+            self._save_settings(
+                intensity=self.slider.value(),
+                mode=self.privacy_mode,
+                window_x=pos.x(),
+                window_y=pos.y(),
+            )
+        except Exception:
+            pass
+
         self.privacy_active = False
         self.privacy_mode = "none"
         super().closeEvent(event)
