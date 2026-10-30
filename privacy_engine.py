@@ -98,7 +98,7 @@ class StatCard(QWidget):
 
 
 class OverlayWindow(QWidget):
-    def __init__(self, geo, mode="circle"):
+    def __init__(self, geo=None, mode="circle"):
         super().__init__()
         self.intensity = 0.5
         self.radius = px(150)
@@ -108,7 +108,10 @@ class OverlayWindow(QWidget):
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.setGeometry(geo)
+        # geo 可能为 None（无可用屏幕 / 远程桌面切换中）。
+        # 此时不设 geometry，交给 showFullScreen 决定，避免 setGeometry(None) 抛错。
+        if geo is not None:
+            self.setGeometry(geo)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.update)
 
@@ -121,7 +124,13 @@ class OverlayWindow(QWidget):
         super().hideEvent(event)
 
     def set_intensity(self, val):
-        self.intensity = val
+        # QColor(0,0,0,alpha) 的 alpha 必须在 0..255，
+        # 越界时 PyQt 会抛错或画出不可预期的结果。
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            v = 0.5
+        self.intensity = min(1.0, max(0.0, v))
 
     def paintEvent(self, event):
         try:
@@ -139,10 +148,22 @@ class OverlayWindow(QWidget):
     def _paint_circle(self, p, w, h):
         """圆形可视区域模式"""
         cursor = QCursor.pos()
-        g = QApplication.primaryScreen().geometry()
+        # 必须减「遮罩自己」的原点，而不是主屏原点。
+        # 主屏不一定是原点 (0,0)：接了副屏并把副屏设为主显示器时，
+        # 主屏坐标可能是负值；遮罩也可能落在副屏上。
+        # 用主屏 geometry 换算会让镂空圆圈整个偏移，用户以为防窥失效。
+        g = self.geometry()
         mx = cursor.x() - g.x()
         my = cursor.y() - g.y()
         r = self.radius
+
+        # 光标不在遮罩内（多屏、拖到另一块屏）时，不加镂空：
+        # 否则圆会被画在边缘，露出一个和用户视点无关的洞。
+        inside = 0 <= mx <= w and 0 <= my <= h
+        if not inside:
+            alpha = int(self.intensity * 255)
+            p.fillRect(0, 0, w, h, QColor(0, 0, 0, alpha))
+            return
 
         path = QPainterPath()
         path.addRect(0, 0, w, h)
@@ -535,19 +556,33 @@ class PrivacyAssistantUI(QWidget):
         self._update_status()
 
     def _stats_off(self):
-        self.s2.set_value("100%")
-        self.s3.set_value("96%")
+        # 关闭后不再遮挡，就如实显示 0%。
+        # 原来固定写 100% / 96%，用户关掉防窥后看到"遮蔽 96%"，
+        # 会以为自己其实还露着 —— 这类"看着像在工作其实没工作"的显示最误导。
+        self.s2.set_value("0%")
+        self.s3.set_value("0%")
         self.s4.set_value("裸屏")
         self.s4._color = "#ff5252"
 
     def _show_overlay(self, mode="circle"):
         if self._overlay is None:
-            geo = QApplication.primaryScreen().geometry()
+            screen = QApplication.primaryScreen()
+            # 远程桌面/多屏热插拔的瞬间 primaryScreen() 可能返回 None，
+            # 直接 .geometry() 会抛 AttributeError，表现为点按钮没反应。
+            geo = screen.geometry() if screen is not None else None
             self._overlay = OverlayWindow(geo, mode)
         else:
             self._overlay.mode = mode
             self._overlay.update()
         self._overlay.set_intensity(self.intensity)
+        # 显式指定屏幕：多屏环境下不指定时，全屏窗口可能跑到光标所在的副屏，
+        # 而用户看的是主屏 —— 结果是"开了防窥"但主屏毫无遮挡。
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            try:
+                self._overlay.setScreen(screen)
+            except Exception:
+                pass
         self._overlay.showFullScreen()
 
     def _hide_overlay(self):
