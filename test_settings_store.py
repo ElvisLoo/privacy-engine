@@ -56,15 +56,26 @@ class TestSanitize(unittest.TestCase):
 
 class TestRoundTrip(unittest.TestCase):
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        # 不用 tempfile.mkdtemp：某些运行环境会扫描临时目录并干扰文件清理，
+        # 导致 tearDown 抛 PermissionError，测试随机变红。
+        # 固定路径放在本目录下，测完自己删干净。
+        here = os.path.dirname(os.path.abspath(__file__))
+        self.tmpdir = os.path.join(here, ".test_tmp")
+        os.makedirs(self.tmpdir, exist_ok=True)
         self._orig = settings_store.config_path
         settings_store.config_path = lambda: os.path.join(self.tmpdir, "cfg.json")
 
     def tearDown(self):
         settings_store.config_path = self._orig
         for name in os.listdir(self.tmpdir):
-            os.remove(os.path.join(self.tmpdir, name))
-        os.rmdir(self.tmpdir)
+            try:
+                os.remove(os.path.join(self.tmpdir, name))
+            except OSError:
+                pass
+        try:
+            os.rmdir(self.tmpdir)
+        except OSError:
+            pass
 
     def test_save_then_load(self):
         ok, err = settings_store.save({"intensity": 73, "mode": "three_zone"})
