@@ -143,12 +143,32 @@ class OverlayWindow(QWidget):
             p.setRenderHint(QPainter.Antialiasing)
             w, h = self.width(), self.height()
 
-            if self.mode == "three_zone":
+            if self.mode == "blackout":
+                self._paint_blackout(p, w, h)
+            elif self.mode == "three_zone":
                 self._paint_three_zone(p, w, h)
             else:
                 self._paint_circle(p, w, h)
         except Exception as e:
             print(f"[Overlay paint error] {e}")
+
+    def _paint_blackout(self, p, w, h):
+        """
+        全屏紧急遮挡：整块屏幕压暗，中间留一行提示。
+
+        和另外两种模式的区别：那两种是"长期开着、只遮一部分"，
+        这个是"有人走过来，马上全遮住"。所以它不跟鼠标走、不留镂空，
+        强度固定接近不透明，并且中心给一句提示避免用户以为死机。
+        """
+        # 留一点透明，让用户仍能感知到背后有东西在动，
+        # 但足够挡住屏幕上的具体内容。
+        alpha = int(min(1.0, max(0.0, self.intensity)) * 250)
+        p.fillRect(0, 0, w, h, QColor(8, 10, 14, alpha))
+
+        # 中央提示：全黑屏幕容易被误判为程序崩溃
+        p.setPen(QColor(255, 255, 255, 40))
+        p.setFont(QFont("Microsoft YaHei", max(12, int(self.width() / 40))))
+        p.drawText(self.rect(), Qt.AlignCenter, "防窥中 · 按快捷键退出")
 
     def _paint_circle(self, p, w, h):
         """圆形可视区域模式"""
@@ -449,6 +469,25 @@ class PrivacyAssistantUI(QWidget):
         lay.addLayout(sl)
         lay.addSpacing(px(8))
 
+        # ---- 紧急遮挡（单独一行，视觉上最突出）----
+        # 放在双按钮之上是有意的：它是"来不及了"时唯一会去按的东西，
+        # 位置越显眼越好。红色而非蓝色，因为它和另外两个不是同一层级。
+        self.btn_blackout = QPushButton("紧急遮挡  F5")
+        self.btn_blackout.setFixedHeight(px(50))
+        self.btn_blackout.setCursor(Qt.PointingHandCursor)
+        self.btn_blackout.setStyleSheet(
+            ("QPushButton{"
+             "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+             "stop:0 #c62828,stop:1 #e53935);"
+             "color:white;border:none;border-radius:%dpx;"
+             "font-size:%dpx;font-weight:bold;font-family:\"Microsoft YaHei\";"
+             "}QPushButton:hover{background:#d32f2f;}"
+             ) % (px(23), font_size(15))
+        )
+        self.btn_blackout.clicked.connect(self._toggle_blackout)
+        lay.addWidget(self.btn_blackout)
+        lay.addSpacing(px(10))
+
         # ---- 双按钮 ----
         btn_row = QHBoxLayout()
         btn_row.setSpacing(px(8))
@@ -603,6 +642,34 @@ class PrivacyAssistantUI(QWidget):
             self._show_overlay("circle")
         self._update_buttons()
 
+    def _toggle_blackout(self):
+        """
+        紧急遮挡：整屏压暗。
+
+        与另两种模式的关键差别是"立刻"：
+        它不看鼠标位置、不做渐变、不依赖当前强度设置，
+        一按就是几乎全黑。用户按这个键时通常只有一两秒反应时间。
+        """
+        if self.privacy_mode == "blackout":
+            self.privacy_active = False
+            self.privacy_mode = "none"
+            self._stats_off()
+            self._hide_overlay()
+        else:
+            self.privacy_active = True
+            self.privacy_mode = "blackout"
+            self._stats_on()
+            # 强制高遮挡度：不跟滑块走，滑块可能是 30% 那种"轻度"。
+            # 注意 _show_overlay 内部会再调一次 set_intensity，
+            # 所以必须在它之后才把 intensity 改回去，
+            # 否则遮罩会拿到滑块的原值，紧急遮挡变成"轻度压暗"，起不到作用。
+            saved = self.intensity
+            self.intensity = 0.98
+            self._show_overlay("blackout")
+            self._overlay.set_intensity(0.98)
+            self.intensity = saved
+        self._update_buttons()
+
     def _toggle_zone(self):
         if self.privacy_mode == "three_zone":
             # 关闭
@@ -705,6 +772,9 @@ def main():
         ui.show()
 
         try:
+            # F5 紧急遮挡：有人走过来时按一下，整屏立刻压暗。
+            # 放在 F6 之前是因为它最急 —— 手忙脚乱时按最上面那个键最顺手。
+            keyboard.add_hotkey("F5", lambda: QTimer.singleShot(0, ui._toggle_blackout))
             keyboard.add_hotkey("F6", lambda: QTimer.singleShot(0, ui._toggle_circle))
             keyboard.add_hotkey("F7", lambda: QTimer.singleShot(0, ui._toggle_zone))
             keyboard.add_hotkey("F8", lambda: QTimer.singleShot(0, lambda: ui.slider.setValue(max(0, ui.slider.value() - 5))))
@@ -718,6 +788,7 @@ def main():
             except Exception:
                 pass
 
+        QShortcut(QKeySequence("F5"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_blackout)
         QShortcut(QKeySequence("F6"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_circle)
         QShortcut(QKeySequence("F7"), ui, context=Qt.ApplicationShortcut).activated.connect(ui._toggle_zone)
         QShortcut(QKeySequence("F8"), ui, context=Qt.ApplicationShortcut).activated.connect(lambda: ui.slider.setValue(max(0, ui.slider.value() - 5)))
@@ -726,6 +797,7 @@ def main():
         print("=" * 40)
         print("  防窥助手")
         print("=" * 40)
+        print("  F5  紧急遮挡（整屏压暗）")
         print("  F6  全屏圆形防窥")
         print("  F7  左右三区域防窥")
         print("  F8  强度 -5%")
