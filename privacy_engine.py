@@ -10,7 +10,7 @@ import traceback
 
 try:
     from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QVBoxLayout, QDesktopWidget, QFrame, QShortcut
-    from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QSize, QEvent
+    from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QSize, QEvent, pyqtSignal
     from PyQt5.QtGui import QPainter, QColor, QLinearGradient, QFont, QFontMetrics, QPainterPath, QBrush, QPen, QKeySequence, QCursor
     import keyboard
     import webbrowser
@@ -241,6 +241,14 @@ class OverlayWindow(QWidget):
 
 
 class PrivacyAssistantUI(QWidget):
+    # 跨线程调用转发。
+    #
+    # keyboard 的热键回调跑在它自己的线程里，直接在那里操作 Qt 对象
+    # （包括 QTimer.singleShot）是不安全的：实测在部分环境下
+    # singleShot 根本不会被执行，表现为「按了热键没反应」，且不报错。
+    # 用信号把调用投递回 Qt 主线程是官方推荐做法。
+    _hotkeyFired = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("防窥助手")
@@ -255,6 +263,7 @@ class PrivacyAssistantUI(QWidget):
         # 读上次的设置：强度、模式、窗口位置。
         # 防窥工具每次启动都要重拨一遍强度，用两天就烦了。
         self._settings = self._load_settings()
+        self._hotkeyFired.connect(self._on_hotkey, Qt.QueuedConnection)
         self._init_ui()
         self._restore_or_center()
 
@@ -642,6 +651,28 @@ class PrivacyAssistantUI(QWidget):
             self._show_overlay("circle")
         self._update_buttons()
 
+    def _on_hotkey(self, action):
+        """
+        全局热键的统一入口。运行在 Qt 主线程（通过 QueuedConnection 投递）。
+
+        为什么要有这一层：keyboard 的回调在它自己的线程里，
+        在那里直接调 QTimer.singleShot 或操作控件，在部分环境下
+        会静默失效 —— 用户按 F5 没反应，日志里什么都没有。
+        """
+        try:
+            if action == "blackout":
+                self._toggle_blackout()
+            elif action == "circle":
+                self._toggle_circle()
+            elif action == "zone":
+                self._toggle_zone()
+            elif action == "up":
+                self.slider.setValue(min(100, self.slider.value() + 5))
+            elif action == "down":
+                self.slider.setValue(max(0, self.slider.value() - 5))
+        except Exception as e:
+            print(f"[hotkey] {action} failed: {e}")
+
     def _toggle_blackout(self):
         """
         紧急遮挡：整屏压暗。
@@ -771,14 +802,20 @@ def main():
         ui = PrivacyAssistantUI()
         ui.show()
 
+        # 热键回调只做一件事：发信号。真正的操作在主线程里执行。
+        # 直接在这里调用 Qt 方法是跨线程操作，实测会静默失效。
+        hotkey_handles = []
         try:
-            # F5 紧急遮挡：有人走过来时按一下，整屏立刻压暗。
-            # 放在 F6 之前是因为它最急 —— 手忙脚乱时按最上面那个键最顺手。
-            keyboard.add_hotkey("F5", lambda: QTimer.singleShot(0, ui._toggle_blackout))
-            keyboard.add_hotkey("F6", lambda: QTimer.singleShot(0, ui._toggle_circle))
-            keyboard.add_hotkey("F7", lambda: QTimer.singleShot(0, ui._toggle_zone))
-            keyboard.add_hotkey("F8", lambda: QTimer.singleShot(0, lambda: ui.slider.setValue(max(0, ui.slider.value() - 5))))
-            keyboard.add_hotkey("F9", lambda: QTimer.singleShot(0, lambda: ui.slider.setValue(min(100, ui.slider.value() + 5))))
+            hotkey_handles.append(
+                keyboard.add_hotkey("F5", lambda: ui._hotkeyFired.emit("blackout")))
+            hotkey_handles.append(
+                keyboard.add_hotkey("F6", lambda: ui._hotkeyFired.emit("circle")))
+            hotkey_handles.append(
+                keyboard.add_hotkey("F7", lambda: ui._hotkeyFired.emit("zone")))
+            hotkey_handles.append(
+                keyboard.add_hotkey("F8", lambda: ui._hotkeyFired.emit("down")))
+            hotkey_handles.append(
+                keyboard.add_hotkey("F9", lambda: ui._hotkeyFired.emit("up")))
         except Exception as e:
             print(f"[WARN] Hotkey registration failed (not admin?): {e}")
             try:
@@ -808,7 +845,23 @@ def main():
         except Exception:
             pass
 
-        sys.exit(app.exec_())
+        rc = app.exec_()
+
+        # 退出前卸载全局热键。
+        # keyboard 的钩子挂在独立线程里，不显式清理的话，
+        # 进程退出后钩子可能残留一小段时间 —— 期间按 F5/F6 会命中
+        # 一个已经不存在的窗口，表现为系统里"有东西在拦截这几个键"。
+        try:
+            for h in hotkey_handles:
+                try:
+                    keyboard.remove_hotkey(h)
+                except Exception:
+                    pass
+            keyboard.unhook_all()
+        except Exception:
+            pass
+
+        sys.exit(rc)
     except Exception as e:
         try:
             print(f"[FATAL ERROR] {e}")
